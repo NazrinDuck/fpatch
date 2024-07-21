@@ -1,0 +1,182 @@
+#!/bin/bash
+# Copyright (c) 2024 NazrinDuck. All Rights Reserved.
+# Usage: fpatch [option].. FILE
+# Needs: env_var $GLIBC, fzf, patchelf, glibc-all-in-one
+ERROR="\033[31;01m[ERROR]\033[0m "
+
+if [[ -z "${GLIBC}" ]]; then
+  echo -n -e "$ERROR" >&2
+  echo -e "Environment variable \$GLIBC is not in your system" >&2
+  echo "Example: (in your ~/.*shrc)" >&2
+  echo -e "export GLIBC=\"/home/user/glibc-all-in-one\"" >&2
+  exit 1
+elif test ! -d "$GLIBC/libs"; then
+  echo -n -e "$ERROR" >&2
+  echo -e "Environment variable \$GLIBC has wrong format" >&2
+  echo "Example: (in your .*shrc)" >&2
+  echo -e "export GLIBC=\"/home/user/glibc-all-in-one\"" >&2
+  exit 1
+fi
+
+check_command ()
+{
+  _has_command=$($1 --version > /dev/null)
+  if (( "$?" == 1)); then
+    echo -n -e "$ERROR" >&2
+    echo "command ${1} not found" >&2
+    echo "make sure command ${1} in your system" >&2
+    exit 1
+  fi
+}
+
+check_command fzf
+check_command patchelf
+
+full=
+old=
+tmux=
+
+while test $# -gt 0; do
+  case "$1" in
+  -v | --version)
+    echo "fpatch 0.1.0"
+    echo "Copyright (c) 2024 NazrinDuck. All Rights Reserved."
+    exit 0
+    ;;
+  -h | --help)
+    echo "Usage: fpatch [option]... FILE" >&2
+    echo -e "Needs: env_var \$GLIBC, fzf, patchelf, glibc-all-in-one" >&2
+    echo ""
+    echo -e "-h, --help\n\tprint this help and exit" >&2
+    echo -e "-v, --version\n\tprint version information and exit" >&2
+    echo -e "-f, --full\n\tfpatch will download glibc if you don't have the choosen one" >&2
+    echo -e "-o, --old\n\tfpatch will choose glibc from old_list and download it if you don't have before" >&2
+    echo -e "-t, --tmux\n\tuse fzf --tmux to choose glibc" >&2
+    exit 0
+    ;;
+  -f | --full)
+    full=yes
+    if test "$old" = yes;then
+      echo -n -e "$ERROR" >&2
+      echo "fpatch:" $"confliting options: " "-f/--full & -o/--old" >&2
+      exit 1
+    fi
+    shift
+    ;;
+  -o | --old)
+    old=yes
+    if test "$full" = yes;then
+      echo -n -e "$ERROR" >&2
+      echo "fpatch:" $"confliting options: " "-f/--full & -o/--old" >&2
+      exit 1
+    fi
+    shift
+    ;;
+  -t | --tmux)
+    tmux=yes
+    shift
+    ;;
+  --)
+    shift; break
+    ;;
+  -*)
+    echo -n -e "$ERROR" >&2
+    echo "fpatch:" $"unrecognized option" "${1}" >&2
+    exit 1
+    ;;
+  *)
+    break
+    ;;
+  esac
+done
+
+case $# in 
+0)
+  echo -n -e "$ERROR" >&2
+  echo "fpatch:" $"missing file arguments" >&2
+  echo $"Try fpatch --help for more information" >&2
+  exit 1
+  ;;
+1)
+  file=$1
+  ;;
+*)
+  echo -n -e "$ERROR" >&2
+  echo "fpatch: can't deal with mutiple files now" >&2
+  exit 1
+  ;;
+esac
+
+
+if test ! -e "$file";then
+  echo -n -e "$ERROR" >&2
+  echo "fpatch: ${file}:" $"No such file or directory" >&2
+  exit 1
+elif test ! -f "$file";then
+  echo -n -e "$ERROR" >&2
+  echo "fpatch: ${file}:" $"not regular file" >&2
+  exit 1
+fi
+
+old_libc=$(ldd "$file" | sed -n "2p" | awk -F" " '{print $1}' | xargs)
+
+libc_list=
+choose_libc=
+
+if [[ "$full" == "yes" ]]; then
+  libc_list="cat $GLIBC/list"
+elif [[ "$old" == "yes" ]]; then
+  libc_list="cat $GLIBC/old_list"
+else
+  libc_list="ls $GLIBC/libs"
+fi
+
+if [[ "$tmux" == "yes" ]]; then
+  choose_libc=$($libc_list | fzf --tmux 50%)
+else
+  choose_libc=$($libc_list | fzf)
+fi
+
+glibc_directory="$GLIBC"/libs/"$choose_libc"
+
+if test ! -d "$glibc_directory"; then
+  echo "${glibc_directory} is not exist now, prepare to download it..."
+  "$GLIBC"/download "$choose_libc"
+  if (( $? == 1 ));then
+    echo -n -e "$ERROR" >&2
+    echo "something wrong while downloading" >&2
+    echo "please check and download manually" >&2
+    exit 1
+  fi
+  echo "succeed in downloading ${glibc_directory}."
+fi
+
+ld_path="$glibc_directory"/ld*.so.2
+libc_path="$glibc_directory"/libc.so.6
+
+if test ! -e "$ld_path";then
+  echo -n -e "$ERROR" >&2
+  echo "can't find ld*.so.2 in ${glibc_directory}" >&2
+  echo "please check it manually" >&2
+  exit 1
+fi
+
+if test ! -e "$libc_path";then
+  echo -n -e "$ERROR" >&2
+  echo "can't find libc.so.6 in ${glibc_directory}" >&2
+  echo "please check it manually" >&2
+  exit 1
+fi
+
+patchelf --set-interpreter "$ld_path" "$file"
+patchelf --replace-needed "$old_libc" "$libc_path" "$file"
+
+if (( $? == 1 ));then
+  echo -n -e "$ERROR" >&2
+  echo "something wrong with patchelf" >&2
+  echo "please check it manually" >&2
+  exit 1
+fi
+
+echo "succeed in patchelf ${file} with ${choose_libc}"
+exit 0
