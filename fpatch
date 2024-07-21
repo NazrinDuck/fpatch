@@ -39,7 +39,7 @@ tmux=
 while test $# -gt 0; do
   case "$1" in
   -v | --version)
-    echo "fpatch 0.1.0"
+    echo "fpatch 0.1.1"
     echo "Copyright (c) 2024 NazrinDuck. All Rights Reserved."
     exit 0
     ;;
@@ -151,11 +151,12 @@ if test ! -d "$glibc_directory"; then
   echo "succeed in downloading ${glibc_directory}."
 fi
 
-ld_path="$glibc_directory"/ld*.so.2
+ld_path="$glibc_directory"/$(ls "$glibc_directory" | grep ld | sed -n '1p')
 libc_path="$glibc_directory"/libc.so.6
 
 if test ! -e "$ld_path";then
   echo -n -e "$ERROR" >&2
+  echo "$ld_path"
   echo "can't find ld*.so.2 in ${glibc_directory}" >&2
   echo "please check it manually" >&2
   exit 1
@@ -167,6 +168,8 @@ if test ! -e "$libc_path";then
   echo "please check it manually" >&2
   exit 1
 fi
+
+echo $old_libc
 
 patchelf --set-interpreter "$ld_path" "$file"
 patchelf --replace-needed "$old_libc" "$libc_path" "$file"
