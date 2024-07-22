@@ -2,6 +2,7 @@
 # Copyright (c) 2024 NazrinDuck. All Rights Reserved.
 # Usage: fpatch [option].. FILE
 # Needs: env_var $GLIBC, fzf, patchelf, glibc-all-in-one
+# More information: faptch -h/--help
 ERROR="\033[31;01m[ERROR]\033[0m "
 
 if [[ -z "${GLIBC}" ]]; then
@@ -39,7 +40,7 @@ tmux=
 while test $# -gt 0; do
   case "$1" in
   -v | --version)
-    echo "fpatch 0.1.1"
+    echo "fpatch 0.1.2"
     echo "Copyright (c) 2024 NazrinDuck. All Rights Reserved."
     exit 0
     ;;
@@ -118,7 +119,7 @@ elif test ! -f "$file";then
   exit 1
 fi
 
-old_libc=$(ldd "$file" | sed -n "2p" | awk -F" " '{print $1}' | xargs)
+old_libc=$(ldd "$file" | tail -n 2 | sed -n "1p" | awk -F" " '{print $1}' | xargs)
 
 libc_list=
 choose_libc=
@@ -169,8 +170,6 @@ if test ! -e "$libc_path";then
   exit 1
 fi
 
-echo $old_libc
-
 patchelf --set-interpreter "$ld_path" "$file"
 patchelf --replace-needed "$old_libc" "$libc_path" "$file"
 
@@ -181,5 +180,5 @@ if (( $? == 1 ));then
   exit 1
 fi
 
-echo "succeed in patchelf ${file} with ${choose_libc}"
+echo "successful to patchelf ${file} with ${choose_libc}"
 exit 0
