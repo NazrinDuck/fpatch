@@ -22,7 +22,7 @@ fi
 check_command ()
 {
   _has_command=$($1 --version > /dev/null)
-  if (( "$?" == 1)); then
+  if (( "$?" != 0)); then
     echo -n -e "$ERROR" >&2
     echo "command ${1} not found" >&2
     echo "make sure command ${1} in your system" >&2
@@ -142,8 +142,12 @@ glibc_directory="$GLIBC"/libs/"$choose_libc"
 
 if test ! -d "$glibc_directory"; then
   echo "${glibc_directory} is not exist now, prepare to download it..."
-  "$GLIBC"/download "$choose_libc"
-  if (( $? == 1 ));then
+  if [[ "$old" == "yes" ]]; then
+    "$GLIBC"/download_old "$choose_libc"
+  else
+    "$GLIBC"/download "$choose_libc"
+  fi
+  if (( $? != 0 ));then
     echo -n -e "$ERROR" >&2
     echo "something wrong while downloading" >&2
     echo "please check and download manually" >&2
