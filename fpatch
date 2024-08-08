@@ -30,12 +30,14 @@ check_command ()
   fi
 }
 
+
 check_command fzf
 check_command patchelf
 
 full=
 old=
 tmux=
+corrent_dir=
 
 while test $# -gt 0; do
   case "$1" in
@@ -53,6 +55,7 @@ while test $# -gt 0; do
     echo -e "-f, --full\n\tfpatch will download glibc if you don't have the choosen one" >&2
     echo -e "-o, --old\n\tfpatch will choose glibc from old_list and download it if you don't have before" >&2
     echo -e "-t, --tmux\n\tuse fzf --tmux to choose glibc" >&2
+    echo -e "-c, --corrent-dir\n\tfind libc and ld in corrent dir" >&2
     exit 0
     ;;
   -f | --full)
@@ -75,6 +78,21 @@ while test $# -gt 0; do
     ;;
   -t | --tmux)
     tmux=yes
+    shift
+    ;;
+  -c | --corrent-dir)
+    corrent_dir=yes
+    if test "$old" = yes;then
+      echo -n -e "$ERROR" >&2
+      echo "fpatch:" $"confliting options: " "-c/--corrent-dir & -o/--old" >&2
+      exit 1
+    fi
+
+    if test "$full" = yes;then
+      echo -n -e "$ERROR" >&2
+      echo "fpatch:" $"confliting options: " "-c/--corrent-dir & -f/--full" >&2
+      exit 1
+    fi
     shift
     ;;
   --)
@@ -121,6 +139,50 @@ fi
 
 old_libc=$(ldd "$file" | tail -n 2 | sed -n "1p" | awk -F" " '{print $1}' | xargs)
 
+
+if [[ "$corrent_dir" == "yes" ]]; then
+  if test -e "libc.so.6"; then
+    libc_path=$(pwd)/libc.so.6
+  else
+    libc_path=$(pwd)/$(ls | grep -E 'libc-2\.[1-3][0-9]\.so' | sed -n '1p')
+  fi
+
+  if test -d "$libc_path";then
+    echo -n -e "$ERROR" >&2
+    echo "$ld_path"
+    echo "can't find libc in $(pwd)" >&2
+    echo "please check it manually" >&2
+    exit 1
+  fi
+
+  if test -e "ld-linux-x86-64.so.2"; then
+    ld_path=$(pwd)/ld-linux-x86-64.so.2
+  else
+    ld_path=$(pwd)/$(ls | grep -E 'ld-2\.[1-3][0-9]\.so' | sed -n '1p')
+  fi
+
+  if test -d "$ld_path";then
+    echo -n -e "$ERROR" >&2
+    echo "$ld_path"
+    echo "can't find ld in $(pwd)" >&2
+    echo "please check it manually" >&2
+    exit 1
+  fi
+
+  patchelf --set-interpreter "$ld_path" "$file"
+  patchelf --replace-needed "$old_libc" "$libc_path" "$file"
+
+  if (( $? == 1 ));then
+    echo -n -e "$ERROR" >&2
+    echo "something wrong with patchelf" >&2
+    echo "please check it manually" >&2
+    exit 1
+  fi
+  
+  echo "successful to patchelf ${file} in $(pwd)"
+  exit 0
+fi
+
 libc_list=
 choose_libc=
 
@@ -159,7 +221,7 @@ fi
 ld_path="$glibc_directory"/$(ls "$glibc_directory" | grep ld | sed -n '1p')
 libc_path="$glibc_directory"/libc.so.6
 
-if test ! -e "$ld_path";then
+if test -d "$ld_path";then
   echo -n -e "$ERROR" >&2
   echo "$ld_path"
   echo "can't find ld*.so.2 in ${glibc_directory}" >&2
@@ -167,7 +229,7 @@ if test ! -e "$ld_path";then
   exit 1
 fi
 
-if test ! -e "$libc_path";then
+if test -d "$libc_path";then
   echo -n -e "$ERROR" >&2
   echo "can't find libc.so.6 in ${glibc_directory}" >&2
   echo "please check it manually" >&2
