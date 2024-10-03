@@ -5,20 +5,6 @@
 # More information: faptch -h/--help
 ERROR="\033[31;01m[ERROR]\033[0m "
 
-if [[ -z "${GLIBC}" ]]; then
-  echo -n -e "$ERROR" >&2
-  echo -e "Environment variable \$GLIBC is not in your system" >&2
-  echo "Example: (in your ~/.*shrc)" >&2
-  echo -e "export GLIBC=\"/home/user/glibc-all-in-one\"" >&2
-  exit 1
-elif test ! -d "$GLIBC/libs"; then
-  echo -n -e "$ERROR" >&2
-  echo -e "Environment variable \$GLIBC has wrong format" >&2
-  echo "Example: (in your .*shrc)" >&2
-  echo -e "export GLIBC=\"/home/user/glibc-all-in-one\"" >&2
-  exit 1
-fi
-
 check_command ()
 {
   _has_command=$($1 --version > /dev/null)
@@ -29,10 +15,6 @@ check_command ()
     exit 1
   fi
 }
-
-
-check_command fzf
-check_command patchelf
 
 full=
 old=
@@ -137,6 +119,23 @@ elif test ! -f "$file";then
   exit 1
 fi
 
+check_command patchelf
+
+
+if [[ -z "${GLIBC}" ]]; then
+  echo -n -e "$ERROR" >&2
+  echo -e "Environment variable \$GLIBC is not in your system" >&2
+  echo "Example: (in your ~/.*shrc)" >&2
+  echo -e "export GLIBC=\"/home/to/path/glibc-all-in-one\"" >&2
+  exit 1
+elif test ! -d "$GLIBC/libs"; then
+  echo -n -e "$ERROR" >&2
+  echo -e "Environment variable \$GLIBC has wrong format" >&2
+  echo "Example: (in your ~/.*shrc)" >&2
+  echo -e "export GLIBC=\"/home/to/path/glibc-all-in-one\"" >&2
+  exit 1
+fi
+
 old_libc=$(ldd "$file" | tail -n 2 | sed -n "1p" | awk -F" " '{print $1}' | xargs)
 
 
@@ -182,6 +181,8 @@ if [[ "$corrent_dir" == "yes" ]]; then
   echo "successful to patchelf ${file} in $(pwd)"
   exit 0
 fi
+
+check_command fzf
 
 libc_list=
 choose_libc=
