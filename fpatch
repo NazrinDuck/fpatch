@@ -24,13 +24,14 @@ corrent_dir=
 while test $# -gt 0; do
   case "$1" in
   -v | --version)
-    echo "fpatch 0.1.2"
+    echo "fpatch 0.1.4"
     echo "Copyright (c) 2024 NazrinDuck. All Rights Reserved."
     exit 0
     ;;
   -h | --help)
     echo "Usage: fpatch [option]... FILE" >&2
     echo -e "Needs: env_var \$GLIBC, fzf, patchelf, glibc-all-in-one" >&2
+    echo -e "if use -c/--corrent-dir option, only need patchelf" >&2
     echo ""
     echo -e "-h, --help\n\tprint this help and exit" >&2
     echo -e "-v, --version\n\tprint version information and exit" >&2
